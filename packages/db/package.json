@@ -4,10 +4,12 @@
   "description": "",
   "main": "index.js",
   "exports" : {
-    "./client" : "./src/index.ts"
+    "./client" : "./dist/index.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "prisma generate && tsc",
+    "postinstall": "prisma generate",
+    "dev": "tsc --watch"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"

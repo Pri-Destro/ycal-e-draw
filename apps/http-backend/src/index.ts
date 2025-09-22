@@ -5,9 +5,11 @@ import { middleware } from "./middleware";
 import {JWT_SECRET}  from "@repo/backend-common/config"; 
 import {CreateUserSchema, SigninSchema, CreateRoomSchema} from "@repo/common/types";
 import {prismaClient} from "@repo/db/client"
+import cors from "cors"
 
 const app = express();
 app.use(express.json())
+app.use(cors())
 
 app.post("/signup", async (req,res) => {
     
@@ -15,18 +17,19 @@ app.post("/signup", async (req,res) => {
 
     if(!parsedData.success){
         res.status(400).json({
-            error : "Invalid Inputs"
+            error : parsedData.error.issues 
         })
         return
     }
 
-    const hashedPassword = bcrypt.hash(parsedData.data.password, 10)
+    const hashedPassword = await bcrypt.hash(parsedData.data.password, 10)
 
     try{
         const user = await prismaClient.user.create({
             data : {
-                userId : parsedData.data.username,
+                id : parsedData.data.username,
                 password : hashedPassword,
+                email : parsedData.data.email,
                 name : parsedData.data.name
             }
         })
@@ -41,6 +44,7 @@ app.post("/signup", async (req,res) => {
             userId : user.id,
         })
     }catch(e){
+        console.log(e)
         res.status(403).json({
             message : "Error at db"
         })
@@ -68,7 +72,7 @@ app.post("/signin",(req,res) => {
 
 })
 
-app.get("/room",middleware, async (req,res)=>{
+app.post("/room",middleware, async (req,res)=>{
 
     const parsedData = CreateRoomSchema.safeParse(req.body);
 
@@ -83,8 +87,7 @@ app.get("/room",middleware, async (req,res)=>{
     const userId = req.userId //from middleware
 
     try{
-
-        const room = await prismaClient.user.create({
+        const room = await prismaClient.room.create({
             data : {
                 slug : parsedData.data.roomName,
                 adminId : userId
@@ -102,21 +105,21 @@ app.get("/room",middleware, async (req,res)=>{
     }
     
 })
-
+ 
+//it returns existing shapes on that rooomId
 app.get("/chat/:roomId", async (req,res)=>{
-    const roomId = Number(req.params.roomId);
+    const roomId = req.params.roomId;
 
     const messages = await prismaClient.chat.findMany({
         where : {
-            roomId : roomId
+            roomId : Number(roomId)
         },
-        order : {
+        orderBy : {
             id : "desc"
         },
         take : 50
-
     })
-
+    
     res.json({
         messages
     })
@@ -137,3 +140,4 @@ app.get("/room/:slug", async (req,res)=>{
 })
 
 app.listen(3000);
+console.log("server started")
