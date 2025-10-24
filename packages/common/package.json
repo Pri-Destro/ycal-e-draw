@@ -8,7 +8,6 @@
     "./types" : "./dist/types.js"
   },
   "scripts": {
-    "dev": "tsc --watch",
     "build": "tsc"
   },
   "devDependencies": {

@@ -8,8 +8,7 @@
   },
   "scripts": {
     "build": "prisma generate && tsc",
-    "postinstall": "prisma generate",
-    "dev": "tsc --watch"
+    "postinstall": "prisma generate"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"

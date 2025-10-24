@@ -27,7 +27,7 @@ const Hero = () => {
           <Link href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             Pricing
           </Link>
-          <Button asChild variant="outline">
+          <Button  variant="outline">
             <Link href="https://github.com" aria-label="GitHub">
               <Github className="mr-2" /> GitHub
             </Link>
@@ -47,10 +47,10 @@ const Hero = () => {
             clean, Excalidraw-style editor for teams and makers.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Button size="lg" variant="hero" asChild>
+            <Button size="lg" >
               <Link href="#get-started">Launch Editor</Link>
             </Button>
-            <Button size="lg" variant="secondary" asChild>
+            <Button size="lg" variant="secondary" >
               <Link href="#features">See Features</Link>
             </Button>
           </div>

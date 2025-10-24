@@ -3,7 +3,6 @@
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@repo/ui/button";  
 import initDraw from "./draw";
-import {WS_URL} from "@/config"
 
 
 

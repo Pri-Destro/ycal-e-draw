@@ -9,7 +9,9 @@ import cors from "cors"
 
 const app = express();
 app.use(express.json())
-app.use(cors())
+app.use(cors({
+    credentials : true
+}))
 
 app.post("/signup", async (req,res) => {
     
@@ -52,7 +54,7 @@ app.post("/signup", async (req,res) => {
 
 })
 
-app.post("/signin",(req,res) => {
+app.post("/signin", async (req,res) => {
 
     const parsedData = SigninSchema.safeParse(req.body);
 
@@ -63,19 +65,48 @@ app.post("/signin",(req,res) => {
     }
 
     const userId = parsedData.data.username;
-    const token = jwt.sign({
-        userId},JWT_SECRET);
+    const password = parsedData.data.password;
 
-    res.json({
-        token
-    })
+    try{
+        const user = await prismaClient.user.findUnique({
+            where : {id : userId},
+        })
 
+        if (!user) return res.json({ error: "User not found" })
+    
+        const isPasswordValid = await bcrypt.compare(password,user.password)
+
+        if(!isPasswordValid) return res.json({error : "Incorrect credentials"})
+
+        const token = jwt.sign(
+            {
+            username: user.id,
+            name: user.name,
+            },
+            JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+    
+        res.status(200).json({
+            message: "Signin successful",
+            token,
+            user: {
+            username: user.id,
+            name: user.name,
+            },
+        });
+
+    }catch(error){
+        console.log("error at backend",error)
+        res.status(500).json({ message: "Internal Server Error" });
+    }
 })
+
 
 app.post("/room",middleware, async (req,res)=>{
 
     const parsedData = CreateRoomSchema.safeParse(req.body);
-
+ 
     if(!parsedData.success){
         res.status(400).json({
             error : "Invalid data"
@@ -106,7 +137,7 @@ app.post("/room",middleware, async (req,res)=>{
     
 })
  
-//it returns existing shapes on that rooomId
+//it returns existing chats on that rooomId
 app.get("/chat/:roomId", async (req,res)=>{
     const roomId = req.params.roomId;
 
@@ -125,6 +156,32 @@ app.get("/chat/:roomId", async (req,res)=>{
     })
 })
 
+//it returns existing shapes on that rooomId
+app.get("/elements/:roomId", async (req,res)=>{
+    const roomId = req.params.roomId;
+
+    try{
+        const elements = await prismaClient.element.findMany({
+            where : {
+                roomId : Number(roomId)
+            },
+            orderBy : {
+                id : "desc"
+            },
+            take : 50
+        })
+
+        res.json({
+            elements
+        })
+    }catch(e){
+        console.log("error at db call ", e)
+        res.status(500)
+    }
+
+})
+
+// returns the slug after getting roomId
 app.get("/room/:slug", async (req,res)=>{
     const slug = req.params.slug;
 
@@ -139,5 +196,5 @@ app.get("/room/:slug", async (req,res)=>{
     })
 })
 
-app.listen(3000);
+app.listen(3001);
 console.log("server started")
