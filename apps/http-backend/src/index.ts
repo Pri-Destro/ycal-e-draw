@@ -26,15 +26,15 @@ app.post("/signup", async (req,res) => {
 
     const hashedPassword = await bcrypt.hash(parsedData.data.password, 10)
 
-    try{
+    try{        
         const user = await prismaClient.user.create({
             data : {
-                id : parsedData.data.username,
-                password : hashedPassword,
                 email : parsedData.data.email,
+                password : hashedPassword,
                 name : parsedData.data.name
             }
         })
+
         
         if(!user){
             res.json({
@@ -43,7 +43,8 @@ app.post("/signup", async (req,res) => {
         }
 
         res.json({
-            userId : user.id,
+            email : user.email,
+            name : user.name
         })
     }catch(e){
         console.log(e)
@@ -64,12 +65,12 @@ app.post("/signin", async (req,res) => {
         })
     }
 
-    const userId = parsedData.data.username;
+    const email = parsedData.data.email;
     const password = parsedData.data.password;
 
     try{
         const user = await prismaClient.user.findUnique({
-            where : {id : userId},
+            where : {email : email},
         })
 
         if (!user) return res.json({ error: "User not found" })
@@ -80,7 +81,8 @@ app.post("/signin", async (req,res) => {
 
         const token = jwt.sign(
             {
-            username: user.id,
+            userId : user.id,
+            email: user.email,
             name: user.name,
             },
             JWT_SECRET,
@@ -91,7 +93,7 @@ app.post("/signin", async (req,res) => {
             message: "Signin successful",
             token,
             user: {
-            username: user.id,
+            email: user.email,
             name: user.name,
             },
         });
@@ -124,7 +126,6 @@ app.post("/room",middleware, async (req,res)=>{
                 adminId : userId
             }
         })
-
         res.json({
             roomId : room.id,
         })
@@ -143,7 +144,7 @@ app.get("/chat/:roomId", async (req,res)=>{
 
     const messages = await prismaClient.chat.findMany({
         where : {
-            roomId : Number(roomId)
+            roomId : roomId
         },
         orderBy : {
             id : "desc"
@@ -163,7 +164,7 @@ app.get("/elements/:roomId", async (req,res)=>{
     try{
         const elements = await prismaClient.element.findMany({
             where : {
-                roomId : Number(roomId)
+                roomId : roomId
             },
             orderBy : {
                 id : "desc"
@@ -194,6 +195,34 @@ app.get("/room/:slug", async (req,res)=>{
     res.json({
         room
     })
+})
+
+app.get("/rooms", middleware, async (req,res) => {
+
+    //@ts-ignore
+    const userId = req.userId
+    try{
+        const rooms = await prismaClient.room.findMany({
+            where : {
+                adminId : userId
+            }
+        })
+
+        const formatted = rooms.map(room => ({
+            roomId: room.id,
+            name: room.slug,                        
+            createdAt: room.createdAt.toISOString(),
+            // collaborators: 1,
+            // admin: room.adminId
+        }));
+
+        return res.json({ rooms: formatted });
+
+    }catch(err){
+        console.error(err);
+        res.status(500).json({message : "Failed to fetch rooms/projects"})
+    }
+
 })
 
 app.listen(3001);

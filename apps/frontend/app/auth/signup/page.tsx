@@ -1,10 +1,15 @@
-'use client'
-
 import { AuthPage } from "../../components/AuthPage";
+import { getUser } from "@/app/lib/getUser";
+import {redirect} from "next/navigation"
 
- export default function Page(){
+ export default async function Page(){
+    
+    const user = await getUser()
+    
+    if(user != null) redirect('/dashboard')
+
     return <div>
-             <AuthPage isSignin = {false}/>
+        <AuthPage isSignIn = {false}/>
     </div>
 
 }

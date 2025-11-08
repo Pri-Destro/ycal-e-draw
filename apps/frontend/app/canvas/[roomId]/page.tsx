@@ -3,6 +3,7 @@ import RoomCanvas from "@/app/components/RoomCanvas"
 export default async function CanvasPage({params} : {params : {roomId : string}}){
 
     const roomId =  (await params).roomId
+    console.log("Room ID:", roomId);
     // const canvasRef = useRef<HTMLCanvasElement>(null)
     // useEffect(()=>{   
 

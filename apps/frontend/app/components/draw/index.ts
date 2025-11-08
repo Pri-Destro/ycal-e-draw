@@ -1,26 +1,15 @@
 import axios, { AxiosError } from "axios";
-import { HTTP_BACKEND, WS_URL } from "@/config";
+import { HTTP_BACKEND } from "@/config";
+import Konva from "konva";
 
 type Shape = {
     id?: string;
-    type: "rect";
+    type: "rect" | "circle" | "ellipse" | "arrow" | "line";
     x: number;
     y: number;
-    width: number;
-    height: number;
-    style?: {
-        strokeColor?: string;
-        backgroundColor?: string;
-        strokeWidth?: number;
-        opacity?: number;
-    };
-} | {
-    id?: string;
-    type: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
+    width?: number;
+    height?: number;
+    points?: number[]; // for arrow and line
     style?: {
         strokeColor?: string;
         backgroundColor?: string;
@@ -29,66 +18,165 @@ type Shape = {
     };
 }
 
+export default async function initDraw(
+    stage: Konva.Stage,
+    layer: Konva.Layer,
+    roomId: string,
+    socket: WebSocket,
+    currentTool: string
+) {
+    // Fetch existing elements
+    const existingShapes: Shape[] = await getExistingElements(roomId);
+    
+    // Render existing shapes
+    renderShapes(existingShapes, layer);
 
-export default async function initDraw(canvas: HTMLCanvasElement, roomId: string, socket: WebSocket) {
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) return;
-
-    // updating elements coming from ws server in canvas
+    // WebSocket message handler
     socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
 
         if (message.type === "element") {
             existingShapes.push(message.element);
-            clearCanvas(existingShapes, canvas, ctx);
+            renderShapes(existingShapes, layer);
         }
     }
 
-    // default canvas colour
-    ctx.fillStyle = "rgba(30,30,30)";                       
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-
     let isDrawing = false;
+    let currentShape: Konva.Shape | null = null;
     let startX = 0;
     let startY = 0;
-    let currentTool = "rect"; 
 
-    // already existing shapes in this room
-    const existingShapes: Shape[] = await getExistingElements(roomId);
-
-
-// draw on mouse down
-    canvas.addEventListener('mousedown', (e) => {
+    // Mouse down event
+    stage.on('mousedown', (e) => {
+        if (e.target !== stage) return; // Only draw on empty space
+        
         isDrawing = true;
-        startX = e.offsetX;
-        startY = e.offsetY;
+        const pos = stage.getPointerPosition();
+        if (!pos) return;
+
+        startX = pos.x;
+        startY = pos.y;
+
+        // Create temporary shape based on current tool
+        if (currentTool === "rect") {
+            currentShape = new Konva.Rect({
+                x: startX,
+                y: startY,
+                width: 0,
+                height: 0,
+                stroke: "rgba(255,255,255)",
+                strokeWidth: 1,
+            });
+        } else if (currentTool === "circle") {
+            currentShape = new Konva.Circle({
+                x: startX,
+                y: startY,
+                radius: 0,
+                stroke: "rgba(255,255,255)",
+                strokeWidth: 1,
+            });
+        } else if (currentTool === "ellipse") {
+            currentShape = new Konva.Ellipse({
+                x: startX,
+                y: startY,
+                radiusX: 0,
+                radiusY: 0,
+                stroke: "rgba(255,255,255)",
+                strokeWidth: 1,
+            });
+        } else if (currentTool === "arrow") {
+            currentShape = new Konva.Arrow({
+                points: [startX, startY, startX, startY],
+                stroke: "rgba(255,255,255)",
+                strokeWidth: 2,
+                fill: "rgba(255,255,255)",
+                pointerLength: 10,
+                pointerWidth: 10,
+            });
+        } else if (currentTool === "line") {
+            currentShape = new Konva.Line({
+                points: [startX, startY, startX, startY],
+                stroke: "rgba(255,255,255)",
+                strokeWidth: 2,
+            });
+        }
+
+        if (currentShape) {
+            layer.add(currentShape);
+        }
     });
 
-// add element when mouse up
-    canvas.addEventListener('mouseup', async (e) => {
-        if (!isDrawing) return;
-        
+    // Mouse move event
+    stage.on('mousemove', (e) => {
+        if (!isDrawing || !currentShape) return;
+
+        const pos = stage.getPointerPosition();
+        if (!pos) return;
+
+        const width = pos.x - startX;
+        const height = pos.y - startY;
+
+        if (currentTool === "rect") {
+            (currentShape as Konva.Rect).width(width);
+            (currentShape as Konva.Rect).height(height);
+        } else if (currentTool === "circle") {
+            const radius = Math.min(Math.abs(width), Math.abs(height)) / 2;
+            (currentShape as Konva.Circle).x(startX + width / 2);
+            (currentShape as Konva.Circle).y(startY + height / 2);
+            (currentShape as Konva.Circle).radius(radius);
+        } else if (currentTool === "ellipse") {
+            (currentShape as Konva.Ellipse).x(startX + width / 2);
+            (currentShape as Konva.Ellipse).y(startY + height / 2);
+            (currentShape as Konva.Ellipse).radiusX(Math.abs(width) / 2);
+            (currentShape as Konva.Ellipse).radiusY(Math.abs(height) / 2);
+        } else if (currentTool === "arrow" || currentTool === "line") {
+            (currentShape as Konva.Arrow | Konva.Line).points([startX, startY, pos.x, pos.y]);
+        }
+
+        layer.batchDraw();
+    });
+
+    // Mouse up event
+    stage.on('mouseup', async (e) => {
+        if (!isDrawing || !currentShape) return;
+
         isDrawing = false;
 
-        const width = e.offsetX - startX;
-        const height = e.offsetY - startY;
+        const pos = stage.getPointerPosition();
+        if (!pos) return;
 
+        const width = pos.x - startX;
+        const height = pos.y - startY;
+
+        // Remove temporary shape
+        currentShape.destroy();
+        currentShape = null;
+
+        // Create new element data
         const newElement: Shape = {
-            type: currentTool,
+            type: currentTool as any,
             x: startX,
             y: startY,
-            width,
-            height,
+            width: currentTool === "rect" ? width : Math.abs(width),
+            height: currentTool === "rect" ? height : Math.abs(height),
             style: {
                 strokeColor: "rgba(255,255,255)",
-                strokeWidth: 1,
+                strokeWidth: currentTool === "arrow" || currentTool === "line" ? 2 : 1,
                 opacity: 1
             }
         };
 
+        // For arrow and line, store points instead
+        if (currentTool === "arrow" || currentTool === "line") {
+            newElement.points = [startX, startY, pos.x, pos.y];
+            delete newElement.width;
+            delete newElement.height;
+        }
+
         existingShapes.push(newElement);
+
+        // Render all shapes
+        renderShapes(existingShapes, layer);
 
         try {
             // Send to other users via WebSocket
@@ -96,84 +184,98 @@ export default async function initDraw(canvas: HTMLCanvasElement, roomId: string
                 socket.send(JSON.stringify({
                     type: "element",
                     roomId,
-                    element: {
-                        ...newElement,
-                    }
+                    element: newElement
                 }));
             }
         } catch (error) {
             console.error('Error saving element:', error);
         }
     });
-
-    canvas.addEventListener('mousemove', (e) => {
-        if (isDrawing) {
-            const width = e.offsetX - startX;
-            const height = e.offsetY - startY;
-
-            clearCanvas(existingShapes, canvas, ctx);
-
-            ctx.strokeStyle = "rgba(255,255,255)";
-            ctx.lineWidth = 1;
-            
-            if (currentTool === "rect") {
-                ctx.strokeRect(startX, startY, width, height);
-            } else if (currentTool === "circle") {
-                const centerX = startX + width / 2;
-                const centerY = startY + height / 2;
-                const radius = Math.min(Math.abs(width), Math.abs(height)) / 2;
-                
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-                ctx.stroke();
-            }
-        }
-    });
-
-    // Initial render of existing shapes
-    clearCanvas(existingShapes, canvas, ctx);
 }
 
-// clear canvas and draw all existing shapes
-function clearCanvas(existingShapes: Shape[], canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);  // clearing context
-    ctx.fillStyle = "rgba(30,30,30)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Render all shapes on the layer
+function renderShapes(shapes: Shape[], layer: Konva.Layer) {
+    // Clear the layer
+    layer.destroyChildren();
 
-    existingShapes.forEach((shape) => {
+    shapes.forEach((shape) => {
         const strokeColor = shape.style?.strokeColor || "rgba(255,255,255)";
         const strokeWidth = shape.style?.strokeWidth || 1;
         const opacity = shape.style?.opacity || 1;
+        const backgroundColor = shape.style?.backgroundColor;
 
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = strokeWidth;
-        ctx.globalAlpha = opacity;
+        let konvaShape: Konva.Shape;
 
         if (shape.type === "rect") {
-            ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+            konvaShape = new Konva.Rect({
+                x: shape.x,
+                y: shape.y,
+                width: shape.width || 0,
+                height: shape.height || 0,
+                stroke: strokeColor,
+                strokeWidth: strokeWidth,
+                fill: backgroundColor,
+                opacity: opacity,
+            });
         } else if (shape.type === "circle") {
-            const centerX = shape.x + shape.width / 2;
-            const centerY = shape.y + shape.height / 2;
-            const radius = Math.min(shape.width, shape.height) / 2;
-            
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-            ctx.stroke();
+            const radius = Math.min(shape.width || 0, shape.height || 0) / 2;
+            konvaShape = new Konva.Circle({
+                x: shape.x + (shape.width || 0) / 2,
+                y: shape.y + (shape.height || 0) / 2,
+                radius: radius,
+                stroke: strokeColor,
+                strokeWidth: strokeWidth,
+                fill: backgroundColor,
+                opacity: opacity,
+            });
+        } else if (shape.type === "ellipse") {
+            konvaShape = new Konva.Ellipse({
+                x: shape.x + (shape.width || 0) / 2,
+                y: shape.y + (shape.height || 0) / 2,
+                radiusX: (shape.width || 0) / 2,
+                radiusY: (shape.height || 0) / 2,
+                stroke: strokeColor,
+                strokeWidth: strokeWidth,
+                fill: backgroundColor,
+                opacity: opacity,
+            });
+        } else if (shape.type === "arrow") {
+            konvaShape = new Konva.Arrow({
+                points: shape.points || [],
+                stroke: strokeColor,
+                strokeWidth: strokeWidth,
+                fill: strokeColor,
+                opacity: opacity,
+                pointerLength: 10,
+                pointerWidth: 10,
+            });
+        } else if (shape.type === "line") {
+            konvaShape = new Konva.Line({
+                points: shape.points || [],
+                stroke: strokeColor,
+                strokeWidth: strokeWidth,
+                opacity: opacity,
+            });
+        } else {
+            return; // Unknown shape type
         }
-        
-        ctx.globalAlpha = 1; // Reset opacity
+
+        layer.add(konvaShape);
     });
+
+    layer.batchDraw();
 }
 
-// Only fetch initial elements when user joins the room
-async function getExistingElements(roomId: string){
+// Fetch existing elements when user joins the room
+async function getExistingElements(roomId: string): Promise<Shape[]> {
     try {
         console.log("Fetching from:", `${HTTP_BACKEND}/elements/${roomId}`);
         const res = await axios.get(`${HTTP_BACKEND}/elements/${roomId}`);
         console.log("Response:", res.data);
 
         const elements = res.data.elements;
-        console.log(elements)
+        console.log(elements);
+        
         return elements.map((element: any) => ({
             id: element.id,
             type: element.type,
@@ -181,6 +283,7 @@ async function getExistingElements(roomId: string){
             y: element.y,
             width: element.width || 0,
             height: element.height || 0,
+            points: element.points,
             style: element.style || {
                 strokeColor: "rgba(255,255,255)",
                 strokeWidth: 1,

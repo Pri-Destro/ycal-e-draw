@@ -1,24 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import axios from "axios";
 import { HTTP_BACKEND } from "@/config";
-import {JWT_SECRET}  from "@repo/backend-common/config"; 
-import jwt from "jsonwebtoken";
+
 
 
 export async function POST(req: NextRequest) {
     try {
-        const { username, password } = await req.json();
+        const { email, password } = await req.json();
 
         const res = await axios.post(`${HTTP_BACKEND}/signin`, {
-            username,
+            email,
             password,
         },{
             withCredentials : true
         });
-            
+        
         const { token, user } = res.data;
-
+        
         if (!token || !user) {
           throw new Error("Missing token or user info");
         }
@@ -47,39 +45,4 @@ export async function POST(req: NextRequest) {
 }
 
 
-export async function GET() {
-  console.log("got here")
-  try {
-    
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
 
-    console.log("here is the token", token)
-
-    if (!token) {
-      return NextResponse.json(
-        { message: "Unauthorized" }, 
-        { status: 401 }
-      );
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      username: string;
-      name: string;
-    };
-
-    return NextResponse.json({
-      user: {
-        username: decoded.username,
-        name: decoded.name
-      }
-    });
-
-  } catch (error) {
-      console.error("Token verification failed:", error);
-      return NextResponse.json(
-        { message: "Invalid token" }, 
-        { status: 401 }
-      );
-  }
-}

@@ -17,7 +17,6 @@ export default function RoomCanvas({roomId } : {roomId : string}){
             const initSocket = async () => {
             try {
                 const res = await axios.get("/api/auth/getToken")
-                console.log("GET /api/auth/getToken →", res.status, res.data);
                 if(res.status === 401){
                     setError("Unauthorized access")
                     router.push("/signin")
@@ -28,7 +27,7 @@ export default function RoomCanvas({roomId } : {roomId : string}){
                 const ws = new WebSocket(`${WS_URL}?token=${token}`)
 
                 ws.onopen = () => {
-                console.log("✅ WebSocket connected");
+                console.log(" WebSocket connected");
                 setSocket(ws)
                 setConnectionStatus("connected")
                 ws.send(

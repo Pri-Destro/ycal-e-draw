@@ -17,16 +17,15 @@ const users : Users[] = [];
 function checkUser(token : string) : string | null{
   try{
       const decoded = jwt.verify(token,JWT_SECRET) as {
-        username : string,
+        email : string,
         name : string
 
       }
 
-      if(!decoded || !(decoded as JwtPayload).username){
+      if(!decoded || !(decoded as JwtPayload).email){
         return null
       }
-      console.log(decoded, "after decoding token")
-      const userId = (decoded as JwtPayload).username
+      const userId = (decoded as JwtPayload).email
       
       return userId
 
@@ -119,7 +118,7 @@ wss.on('connection', function connection(ws,request) {
           angle: angle || 0,
           style: style || null,
           data: data || null,
-          roomId : Number(roomId),
+          roomId : roomId,
           userId
         }
       });
